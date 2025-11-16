@@ -1,0 +1,1234 @@
+ <!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <title>Advent Gifts</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- Telegram WebApp SDK -->
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <!-- GSAP для «нереальных» анимаций -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+
+  <style>
+    :root {
+      --bg: #020818;
+      --bg2: #050d20;
+      --accent: #1f6dff;
+      --accent-soft: rgba(31, 109, 255, 0.45);
+      --accent-strong: rgba(76, 150, 255, 0.9);
+      --text-main: #e7f1ff;
+      --text-muted: #6b88c7;
+      --danger: #ff4469;
+      --radius-xl: 26px;
+      --radius-lg: 22px;
+      --radius-md: 18px;
+      --blur-strong: 26px;
+      --transition-fast: 0.2s ease-out;
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: radial-gradient(circle at top, #071534 0, #01040b 45%, #000 100%);
+      color: var(--text-main);
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text",
+        "Segoe UI", sans-serif;
+      overflow: hidden;
+    }
+
+    #phone {
+      position: relative;
+      width: 100%;
+      max-width: 420px;
+      height: 95vh;
+      max-height: 860px;
+      border-radius: 40px;
+      padding: 18px 16px;
+      background: radial-gradient(circle at top left, #0f244f 0, #050914 55%, #000 100%);
+      box-shadow:
+        0 0 40px rgba(4, 35, 120, 0.75),
+        0 0 160px rgba(9, 91, 255, 0.6);
+      overflow: hidden;
+    }
+
+    .stars-bg {
+      position: absolute;
+      inset: 0;
+      background-image:
+        radial-gradient(circle at 10% 20%, rgba(61, 124, 255, 0.9) 0, transparent 40%),
+        radial-gradient(circle at 80% 0, rgba(23, 85, 255, 0.7) 0, transparent 40%),
+        radial-gradient(circle at 50% 100%, rgba(11, 51, 150, 0.65) 0, transparent 50%);
+      mix-blend-mode: screen;
+      opacity: 0.35;
+      pointer-events: none;
+    }
+
+    .noise {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      opacity: 0.25;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160' viewBox='0 0 160 160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.2' numOctaves='3' stitchTiles='noStitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.55'/%3E%3C/svg%3E");
+      mix-blend-mode: soft-light;
+    }
+
+    .content {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      border-radius: 30px;
+      padding: 12px 14px 18px;
+      background: linear-gradient(145deg, rgba(4, 15, 40, 0.96), rgba(1, 6, 18, 0.98));
+      backdrop-filter: blur(18px);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* HEADER */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+      z-index: 2;
+    }
+
+    .user-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 12px;
+      border-radius: 999px;
+      border: 1px solid rgba(151, 187, 255, 0.35);
+      background: radial-gradient(
+          circle at top left,
+          rgba(60, 140, 255, 0.5),
+          transparent 55%
+        ),
+        linear-gradient(135deg, rgba(3, 15, 44, 0.95), rgba(3, 12, 31, 0.95));
+      box-shadow:
+        0 0 18px rgba(18, 84, 255, 0.4),
+        0 0 2px rgba(255, 255, 255, 0.35) inset;
+      font-size: 14px;
+      letter-spacing: 0.02em;
+    }
+
+    .user-pill__avatar {
+      width: 22px;
+      height: 22px;
+      border-radius: 999px;
+      border: 1px solid rgba(162, 195, 255, 0.7);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 15px;
+      background: radial-gradient(circle at 30% 0, #53a4ff 0, #08203f 45%, #020612 100%);
+      box-shadow:
+        0 0 12px rgba(26, 110, 255, 0.7),
+        0 0 0 1px rgba(10, 38, 88, 0.95);
+    }
+
+    .user-pill__name {
+      font-weight: 500;
+    }
+
+    .balance-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 11px;
+      border-radius: 999px;
+      border: 1px solid rgba(151, 187, 255, 0.3);
+      background: radial-gradient(
+          circle at top right,
+          rgba(56, 157, 255, 0.6),
+          transparent 55%
+        ),
+        linear-gradient(145deg, rgba(2, 16, 50, 0.98), rgba(1, 6, 20, 0.98));
+      box-shadow:
+        0 0 16px rgba(23, 99, 255, 0.6),
+        0 0 0 1px rgba(5, 20, 60, 0.9);
+      font-size: 13px;
+    }
+
+    .star-icon {
+      width: 20px;
+      height: 20px;
+      border-radius: 999px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      background: radial-gradient(circle at 30% 0, #fff 0, #ffd45b 40%, #d38a08 90%);
+      color: #0b0b1b;
+      box-shadow:
+        0 0 16px rgba(255, 221, 124, 0.95),
+        0 0 0 1px rgba(255, 255, 255, 0.8);
+    }
+
+    .balance-pill__value {
+      font-variant-numeric: tabular-nums;
+      color: var(--text-main);
+      opacity: 0.92;
+    }
+
+    /* SCREENS */
+    .screens {
+      position: relative;
+      flex: 1;
+      border-radius: 26px;
+      padding: 16px 14px 14px;
+      background: radial-gradient(circle at top, rgba(48, 103, 255, 0.08), transparent 55%),
+        linear-gradient(160deg, rgba(3, 14, 37, 0.98), rgba(1, 4, 16, 0.98));
+      box-shadow: 0 0 0 1px rgba(19, 61, 160, 0.6) inset;
+      overflow: hidden;
+    }
+
+    .screen {
+      position: absolute;
+      inset: 0;
+      padding: 6px;
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(10px);
+    }
+
+    .screen.active {
+      opacity: 1;
+      pointer-events: auto;
+      transform: translateY(0);
+    }
+
+    .screen-title {
+      font-size: 20px;
+      font-weight: 500;
+      margin-bottom: 10px;
+      color: var(--text-main);
+    }
+
+    .subtitle {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-bottom: 12px;
+    }
+
+    /* WEEK SELECTION */
+    .week-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 10px;
+    }
+
+    .week-card {
+      position: relative;
+      border-radius: 20px;
+      padding: 12px 10px 11px;
+      background: radial-gradient(circle at top, rgba(60, 130, 255, 0.16), transparent 65%),
+        linear-gradient(140deg, rgba(5, 19, 58, 0.98), rgba(1, 7, 26, 0.98));
+      border: 1px solid rgba(115, 167, 255, 0.7);
+      box-shadow:
+        0 0 22px rgba(35, 118, 255, 0.8),
+        0 0 0 1px rgba(3, 9, 32, 0.95) inset;
+      overflow: hidden;
+      cursor: pointer;
+      transition: transform var(--transition-fast), box-shadow var(--transition-fast),
+        border-color var(--transition-fast);
+    }
+
+    .week-card:hover {
+      transform: translateY(-2px) scale(1.015);
+      box-shadow:
+        0 0 32px rgba(72, 160, 255, 0.9),
+        0 0 0 1px rgba(9, 24, 80, 0.95) inset;
+    }
+
+    .week-card__gift-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 12px;
+      border: 1px solid rgba(145, 193, 255, 0.6);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 8px;
+      background: radial-gradient(circle at 30% 0, rgba(103, 171, 255, 0.95), rgba(3, 12, 40, 0.98));
+      box-shadow:
+        0 0 18px rgba(74, 150, 255, 0.85),
+        0 0 0 1px rgba(4, 16, 60, 0.95);
+      font-size: 18px;
+    }
+
+    .week-card__label {
+      font-size: 14px;
+      margin-bottom: 4px;
+    }
+
+    .week-card__price {
+      font-size: 13px;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .week-card__price span.star-plain {
+      font-size: 12px;
+      opacity: 0.95;
+    }
+
+    .week-card--premium {
+      border-color: rgba(255, 196, 107, 0.95);
+      box-shadow:
+        0 0 32px rgba(255, 205, 120, 0.85),
+        0 0 0 1px rgba(31, 15, 1, 0.95) inset;
+      background: radial-gradient(circle at top, rgba(254, 225, 155, 0.18), transparent 64%),
+        linear-gradient(140deg, rgba(54, 27, 3, 0.95), rgba(12, 7, 2, 0.98));
+    }
+
+    .week-card--owned {
+      border-color: rgba(129, 255, 191, 0.9);
+      box-shadow:
+        0 0 26px rgba(103, 255, 200, 0.85),
+        0 0 0 1px rgba(4, 22, 17, 0.95) inset;
+    }
+
+    .week-card--owned .week-card__price {
+      color: #82ffd1;
+    }
+
+    .week-card--owned .week-card__price span.star-plain {
+      display: none;
+    }
+
+    .week-card--owned .week-card__price::before {
+      content: "Открыто";
+      font-size: 13px;
+    }
+
+    .main-cta {
+      margin-top: 20px;
+      display: flex;
+      justify-content: center;
+    }
+
+    .btn-primary {
+      min-width: 70%;
+      padding: 13px 18px;
+      border-radius: 999px;
+      border: 1px solid rgba(137, 184, 255, 0.8);
+      background: radial-gradient(circle at top, rgba(81, 148, 255, 0.95), rgba(7, 25, 86, 0.98));
+      color: #f5fbff;
+      font-size: 15px;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      text-align: center;
+      cursor: pointer;
+      box-shadow:
+        0 0 28px rgba(77, 146, 255, 0.9),
+        0 0 0 1px rgba(4, 16, 50, 0.95);
+      transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-1px) scale(1.02);
+      box-shadow:
+        0 0 44px rgba(111, 183, 255, 0.95),
+        0 0 0 1px rgba(8, 24, 68, 0.95);
+    }
+
+    .btn-primary:active {
+      transform: translateY(1px) scale(0.99);
+    }
+
+    /* WEEK DAYS SCREEN */
+    .week-days-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+
+    .week-days-title {
+      font-size: 18px;
+      font-weight: 500;
+    }
+
+    .btn-back {
+      border-radius: 999px;
+      border: 1px solid rgba(147, 185, 255, 0.6);
+      background: linear-gradient(135deg, rgba(4, 16, 46, 0.98), rgba(1, 6, 22, 0.98));
+      width: 34px;
+      height: 34px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      box-shadow:
+        0 0 14px rgba(38, 121, 255, 0.7),
+        0 0 0 1px rgba(2, 9, 30, 0.95);
+      margin-right: 4px;
+    }
+
+    .btn-back span {
+      font-size: 18px;
+      transform: translateX(-1px);
+    }
+
+    .days-grid {
+      margin-top: 10px;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .day-card {
+      position: relative;
+      border-radius: 20px;
+      padding: 9px 6px 8px;
+      background: radial-gradient(circle at top, rgba(44, 115, 255, 0.16), transparent 64%),
+        linear-gradient(145deg, rgba(4, 16, 50, 0.98), rgba(2, 7, 27, 0.98));
+      border: 1px solid rgba(101, 151, 255, 0.7);
+      box-shadow:
+        0 0 18px rgba(38, 120, 255, 0.7),
+        0 0 0 1px rgba(2, 8, 30, 0.96) inset;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 5px;
+      cursor: pointer;
+      transition: transform var(--transition-fast), box-shadow var(--transition-fast),
+        border-color var(--transition-fast), background var(--transition-fast);
+      min-height: 88px;
+    }
+
+    .day-card__icon {
+      width: 26px;
+      height: 26px;
+      border-radius: 12px;
+      border: 1px solid rgba(145, 193, 255, 0.75);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 15px;
+      background: radial-gradient(circle at 30% 0, rgba(96, 167, 255, 0.95), rgba(4, 16, 46, 0.98));
+      box-shadow:
+        0 0 16px rgba(77, 151, 255, 0.85),
+        0 0 0 1px rgba(4, 15, 46, 0.96);
+    }
+
+    .day-card__day {
+      font-size: 13px;
+    }
+
+    .day-card__timer {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .day-card--locked {
+      border-style: dashed;
+      border-color: rgba(90, 119, 177, 0.7);
+      background: linear-gradient(145deg, rgba(4, 14, 40, 0.98), rgba(1, 4, 18, 0.98));
+      box-shadow:
+        0 0 12px rgba(22, 64, 145, 0.7),
+        0 0 0 1px rgba(1, 4, 15, 0.98) inset;
+    }
+
+    .day-card--locked .day-card__icon {
+      border-style: solid;
+      border-color: rgba(90, 126, 190, 0.7);
+      background: linear-gradient(145deg, rgba(10, 26, 70, 0.98), rgba(4, 12, 30, 0.98));
+    }
+
+    .day-card--locked .lock-symbol {
+      font-size: 16px;
+    }
+
+    .day-card--open {
+      border-color: rgba(131, 255, 201, 0.95);
+      box-shadow:
+        0 0 26px rgba(100, 255, 198, 0.95),
+        0 0 0 1px rgba(4, 22, 18, 0.95) inset;
+      background: radial-gradient(circle at top, rgba(100, 255, 198, 0.3), transparent 64%),
+        linear-gradient(140deg, rgba(12, 60, 44, 0.98), rgba(2, 9, 12, 0.98));
+    }
+
+    .day-card--open .day-card__timer {
+      color: #86ffd3;
+    }
+
+    .week-info {
+      margin-top: 4px;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    /* GIFT SCREEN */
+    .gift-screen {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      gap: 18px;
+    }
+
+    .gift-box {
+      position: relative;
+      width: 150px;
+      height: 150px;
+      border-radius: 32px;
+      border: 1px solid rgba(140, 192, 255, 0.9);
+      background: radial-gradient(circle at 30% 0, rgba(100, 179, 255, 0.98), rgba(2, 8, 26, 0.98));
+      box-shadow:
+        0 0 40px rgba(92, 166, 255, 0.95),
+        0 0 0 1px rgba(3, 10, 32, 0.98);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      overflow: hidden;
+    }
+
+    .gift-box::before,
+    .gift-box::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background-image: radial-gradient(circle, rgba(255, 255, 255, 0.85) 0, transparent 60%);
+      opacity: 0;
+      mix-blend-mode: screen;
+      pointer-events: none;
+    }
+
+    .gift-box__icon {
+      font-size: 64px;
+      filter: drop-shadow(0 0 14px rgba(255, 255, 255, 0.9));
+    }
+
+    .gift-title {
+      font-size: 20px;
+      font-weight: 500;
+    }
+
+    .gift-subtitle {
+      font-size: 13px;
+      color: var(--text-muted);
+      max-width: 260px;
+      margin: 0 auto;
+      line-height: 1.4;
+    }
+
+    .gift-buttons {
+      display: flex;
+      gap: 10px;
+      margin-top: 8px;
+    }
+
+    .btn-ghost,
+    .btn-danger {
+      flex: 1;
+      padding: 10px 12px;
+      border-radius: 999px;
+      font-size: 14px;
+      cursor: pointer;
+      border: 1px solid rgba(146, 188, 255, 0.8);
+      background: linear-gradient(145deg, rgba(3, 15, 44, 0.98), rgba(4, 10, 30, 0.98));
+      color: var(--text-main);
+      box-shadow:
+        0 0 18px rgba(58, 129, 255, 0.7),
+        0 0 0 1px rgba(2, 8, 26, 0.98);
+      transition: transform var(--transition-fast), box-shadow var(--transition-fast),
+        border-color var(--transition-fast), background var(--transition-fast);
+    }
+
+    .btn-danger {
+      border-color: rgba(255, 114, 149, 0.9);
+      background: radial-gradient(circle at top, rgba(255, 123, 158, 0.9), rgba(50, 5, 20, 0.98));
+      box-shadow:
+        0 0 26px rgba(255, 87, 139, 0.95),
+        0 0 0 1px rgba(22, 3, 9, 0.98);
+    }
+
+    .btn-ghost:hover,
+    .btn-danger:hover {
+      transform: translateY(-1px) scale(1.02);
+      box-shadow:
+        0 0 30px rgba(126, 187, 255, 0.9),
+        0 0 0 1px rgba(4, 14, 40, 0.98);
+    }
+
+    .btn-danger:hover {
+      box-shadow:
+        0 0 32px rgba(255, 126, 173, 0.98),
+        0 0 0 1px rgba(32, 4, 11, 0.98);
+    }
+
+    .gift-buttons.hidden {
+      display: none;
+    }
+
+    /* PATH MODAL */
+    .modal-backdrop {
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(circle at top, rgba(16, 48, 110, 0.95), rgba(1, 2, 6, 0.98));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      pointer-events: none;
+      z-index: 15;
+      backdrop-filter: blur(26px);
+    }
+
+    .modal-backdrop.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .modal-card {
+      position: relative;
+      width: 100%;
+      max-width: 320px;
+      border-radius: var(--radius-xl);
+      padding: 18px 16px 16px;
+      background: radial-gradient(circle at top, rgba(70, 143, 255, 0.25), transparent 70%),
+        linear-gradient(145deg, rgba(4, 20, 56, 0.98), rgba(1, 5, 18, 0.98));
+      border: 1px solid rgba(132, 183, 255, 0.9);
+      box-shadow:
+        0 0 40px rgba(90, 164, 255, 0.95),
+        0 0 0 1px rgba(4, 16, 48, 0.98);
+    }
+
+    .modal-close {
+      position: absolute;
+      top: 10px;
+      right: 12px;
+      width: 26px;
+      height: 26px;
+      border-radius: 999px;
+      border: 1px solid rgba(152, 189, 255, 0.8);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      cursor: pointer;
+      background: radial-gradient(circle at top, rgba(80, 146, 255, 0.85), rgba(7, 21, 70, 0.98));
+      box-shadow:
+        0 0 16px rgba(92, 162, 255, 0.95),
+        0 0 0 1px rgba(4, 16, 50, 0.98);
+    }
+
+    .modal-lottie {
+      width: 92px;
+      height: 92px;
+      margin: 4px auto 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(161, 199, 255, 0.9);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: radial-gradient(circle at 30% 0, rgba(114, 181, 255, 0.95), rgba(3, 12, 40, 0.98));
+      box-shadow:
+        0 0 24px rgba(102, 177, 255, 0.95),
+        0 0 0 1px rgba(4, 16, 48, 0.98);
+      font-weight: 600;
+      font-size: 14px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    .modal-text {
+      font-size: 14px;
+      text-align: center;
+      margin: 0 4px 12px;
+      line-height: 1.4;
+    }
+
+    .modal-text span {
+      color: #9fd6ff;
+    }
+
+    .modal-footer {
+      display: flex;
+      justify-content: center;
+    }
+
+    /* Utility */
+    .hidden {
+      display: none !important;
+    }
+
+    @media (max-width: 480px) {
+      #phone {
+        border-radius: 0;
+        height: 100vh;
+        max-height: none;
+        box-shadow: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="phone">
+    <div class="stars-bg"></div>
+    <div class="noise"></div>
+    <div class="content">
+      <div class="header">
+        <div class="user-pill">
+          <div class="user-pill__avatar">V</div>
+          <div class="user-pill__name">User</div>
+        </div>
+        <div class="balance-pill" id="balance-pill">
+          <div class="star-icon">★</div>
+          <div class="balance-pill__value" id="balance-value">+0.00</div>
+        </div>
+      </div>
+
+      <div class="screens">
+        <!-- SCREEN: WEEK SELECTION -->
+        <section id="screen-weeks" class="screen active">
+          <div class="screen-title">Advent Gifts</div>
+          <div class="subtitle">
+            Выберите неделю или начните полный путь, чтобы открывать подарки каждый день.
+          </div>
+
+          <div class="week-grid" id="week-grid">
+            <!-- Карточки генерируются JS внутри week-grid -->
+          </div>
+
+          <div class="main-cta">
+            <button class="btn-primary" id="btn-start-path">НАЧАТЬ ПУТЬ</button>
+          </div>
+        </section>
+
+        <!-- SCREEN: WEEK DAYS -->
+        <section id="screen-week-days" class="screen">
+          <div class="week-days-header">
+            <button class="btn-back" id="btn-back-to-weeks">
+              <span>‹</span>
+            </button>
+            <div class="week-days-title" id="week-days-title">Week 1</div>
+            <div style="width:34px;height:34px;"></div>
+          </div>
+          <div class="subtitle">
+            Открывайте один подарок каждый день. Следующий день разблокируется автоматически.
+          </div>
+          <div class="days-grid" id="days-grid"></div>
+          <div class="week-info" id="week-info"></div>
+        </section>
+
+        <!-- SCREEN: GIFT -->
+        <section id="screen-gift" class="screen">
+          <div class="gift-screen">
+            <div class="gift-box" id="gift-box">
+              <div class="gift-box__icon">🎁</div>
+            </div>
+            <div class="gift-title" id="gift-title">Нажмите, чтобы открыть</div>
+            <div class="gift-subtitle" id="gift-subtitle">
+              Внутри спрятан ваш ежедневный подарок. Коснитесь коробки, чтобы взорвать салют и посмотреть, что выпало.
+            </div>
+            <div class="gift-buttons hidden" id="gift-buttons">
+              <button class="btn-ghost" id="btn-claim">Получить</button>
+              <button class="btn-danger" id="btn-burn">Сжечь</button>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <!-- MODAL: PATH START -->
+      <div class="modal-backdrop" id="modal-path">
+        <div class="modal-card">
+          <div class="modal-close" id="modal-path-close">✕</div>
+          <div class="modal-lottie">Lottie</div>
+          <div class="modal-text">
+            На протяжении <span>31 дня</span> вы будете получать подарки
+            до <span>31 декабря 2026 г.</span>  
+            Полный путь открывает все недели сразу.
+          </div>
+          <div class="modal-footer">
+            <button class="btn-primary" id="btn-buy-path">ПОЛУЧИТЬ 1000★</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ----------------- TELEGRAM INIT -----------------
+    const tg = window.Telegram ? window.Telegram.WebApp : null;
+    if (tg) {
+      tg.ready();
+      try { tg.expand(); } catch(e) {}
+      if (tg.initDataUnsafe && tg.initDataUnsafe.user) {
+        const name = tg.initDataUnsafe.user.first_name || 'User';
+        document.querySelector('.user-pill__name').textContent = name;
+        document.querySelector('.user-pill__avatar').textContent = name[0].toUpperCase();
+      }
+    }
+
+    // Баланс чисто визуальный демо
+    let starsBalance = 0;
+    const balanceValueEl = document.getElementById('balance-value');
+    function updateBalanceDisplay() {
+      balanceValueEl.textContent = '+' + starsBalance.toFixed(2);
+    }
+    updateBalanceDisplay();
+
+    // ----------------- WEEK DATA -----------------
+    const weeks = [
+      { id: 1, price: 200, premium: false, owned: false },
+      { id: 2, price: 200, premium: false, owned: false },
+      { id: 3, price: 200, premium: false, owned: false },
+      { id: 4, price: 200, premium: false, owned: false },
+      { id: 5, price: 450, premium: true, owned: false },
+    ];
+    let fullPathOwned = false;
+
+    const weekGrid = document.getElementById('week-grid');
+
+    function renderWeekCards() {
+      weekGrid.innerHTML = '';
+      weeks.forEach((week) => {
+        const card = document.createElement('div');
+        card.className = 'week-card' +
+          (week.premium ? ' week-card--premium' : '') +
+          (week.owned || fullPathOwned ? ' week-card--owned' : '');
+        card.dataset.weekId = week.id;
+
+        card.innerHTML = `
+          <div class="week-card__gift-icon">🎁</div>
+          <div class="week-card__label">week ${week.id}</div>
+          <div class="week-card__price">
+              ${week.owned || fullPathOwned ? '' : week.price + '&nbsp;'}
+              <span class="star-plain">★</span>
+          </div>
+        `;
+
+        card.addEventListener('click', () => onWeekCardClick(week));
+        weekGrid.appendChild(card);
+      });
+
+      // появление анимацией
+      if (window.gsap) {
+        gsap.fromTo(
+          '.week-card',
+          { opacity: 0, y: 20, scale: 0.9 },
+          {
+            opacity: 1,
+            y: 0,
+            scale: 1,
+            stagger: 0.06,
+            duration: 0.45,
+            ease: 'back.out(1.7)',
+          }
+        );
+      }
+    }
+    renderWeekCards();
+
+    // ----------------- SCREEN SWITCHING -----------------
+    const screens = {
+      weeks: document.getElementById('screen-weeks'),
+      weekDays: document.getElementById('screen-week-days'),
+      gift: document.getElementById('screen-gift'),
+    };
+
+    function showScreen(name) {
+      Object.values(screens).forEach((el) => el.classList.remove('active'));
+      const el = screens[name];
+      el.classList.add('active');
+      if (window.gsap) {
+        gsap.fromTo(
+          el,
+          { opacity: 0, y: 12, scale: 0.99 },
+          { opacity: 1, y: 0, scale: 1, duration: 0.35, ease: 'power2.out' }
+        );
+      }
+    }
+
+    // ----------------- OPEN INVOICE HELPERS -----------------
+    function openInvoiceDemo(slug, onPaid) {
+      // slug = строка инвойса для Stars
+      if (!tg || !tg.openInvoice) {
+        console.log('Telegram WebApp недоступен, эмулирую оплату:', slug);
+        setTimeout(() => {
+          alert('Эмуляция: оплата ' + slug + ' прошла успешно ✅');
+          if (typeof onPaid === 'function') onPaid();
+        }, 500);
+        return;
+      }
+      tg.openInvoice(slug, (status) => {
+        console.log('Invoice status', status);
+        if (status === 'paid') {
+          if (typeof onPaid === 'function') onPaid();
+        } else if (status === 'failed' || status === 'cancelled') {
+          if (tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('error');
+        }
+      });
+    }
+
+    // ----------------- WEEK CARD CLICK -----------------
+    let currentWeekId = null;
+
+    function onWeekCardClick(week) {
+      currentWeekId = week.id;
+
+      if (fullPathOwned || week.owned) {
+        // уже куплено — сразу открываем неделю
+        openWeekDays(week.id);
+        return;
+      }
+
+      // Покупка отдельной недели
+      const confirmText =
+        `Купить неделю ${week.id} за ${week.price}⭐ и открыть 7 подарков?`;
+      if (!confirm(confirmText)) return;
+
+      // TODO: сюда подставить реальный slug Stars-инвойса для конкретной недели
+      const invoiceSlug = 'WEEK_' + week.id + '_STARS_DEMO';
+
+      openInvoiceDemo(invoiceSlug, () => {
+        week.owned = true;
+        starsBalance += week.price;
+        updateBalanceDisplay();
+        renderWeekCards();
+        openWeekDays(week.id);
+      });
+    }
+
+    // ----------------- PATH MODAL -----------------
+    const modalPath = document.getElementById('modal-path');
+    const btnStartPath = document.getElementById('btn-start-path');
+    const btnBuyPath = document.getElementById('btn-buy-path');
+    const modalPathClose = document.getElementById('modal-path-close');
+
+    function showPathModal(show) {
+      if (show) {
+        modalPath.classList.add('active');
+        if (window.gsap) {
+          gsap.fromTo(
+            '.modal-card',
+            { opacity: 0, scale: 0.8, y: 20 },
+            { opacity: 1, scale: 1, y: 0, duration: 0.35, ease: 'back.out(1.6)' }
+          );
+        }
+      } else {
+        modalPath.classList.remove('active');
+      }
+    }
+
+    btnStartPath.addEventListener('click', () => showPathModal(true));
+    modalPathClose.addEventListener('click', () => showPathModal(false));
+
+    btnBuyPath.addEventListener('click', () => {
+      if (fullPathOwned) {
+        showPathModal(false);
+        return;
+      }
+      // TODO: сюда подставить реальный slug Stars-инвойса на 1000⭐
+      const invoiceSlug = 'FULL_PATH_1000_STARS_DEMO';
+
+      openInvoiceDemo(invoiceSlug, () => {
+        fullPathOwned = true;
+        weeks.forEach((w) => (w.owned = true));
+        starsBalance += 1000;
+        updateBalanceDisplay();
+        renderWeekCards();
+        showPathModal(false);
+        // Авто-открытие первой недели
+        openWeekDays(1);
+      });
+    });
+
+    // ----------------- WEEK DAYS & TIMERS -----------------
+    const daysGrid = document.getElementById('days-grid');
+    const weekDaysTitle = document.getElementById('week-days-title');
+    const weekInfoEl = document.getElementById('week-info');
+    const btnBackToWeeks = document.getElementById('btn-back-to-weeks');
+
+    let dayTimers = [];
+    let daysMeta = [];
+    let timerInterval = null;
+
+    function createWeekDaysMeta(weekId) {
+      const base = Date.now();
+      const meta = [];
+      for (let i = 1; i <= 7; i++) {
+        const isNow = i === 1;
+        const unlockAt = base + (i - 1) * 24 * 60 * 60 * 1000;
+        meta.push({
+          weekId,
+          day: i,
+          unlockAt,
+          opened: false,
+          isOpenNow: isNow,
+        });
+      }
+      return meta;
+    }
+
+    function openWeekDays(weekId) {
+      currentWeekId = weekId;
+      weekDaysTitle.textContent = 'week ' + weekId;
+      daysMeta = createWeekDaysMeta(weekId);
+
+      renderDays();
+      startTimers();
+      showScreen('weekDays');
+    }
+
+    function renderDays() {
+      daysGrid.innerHTML = '';
+      daysMeta.forEach((item, idx) => {
+        const card = document.createElement('div');
+        const now = Date.now();
+        const locked = now < item.unlockAt;
+        const open =
+          !locked && (item.isOpenNow || item.opened === true);
+
+        card.className = 'day-card ' +
+          (locked ? 'day-card--locked' : '') +
+          (open ? 'day-card--open' : '');
+
+        const remainingMs = item.unlockAt - now;
+        const timerText = locked
+          ? formatRemaining(remainingMs)
+          : (item.opened ? 'Открыто' : 'OPEN');
+
+        card.innerHTML = `
+          <div class="day-card__icon">
+            ${locked ? '<span class="lock-symbol">🔒</span>' : '🎁'}
+          </div>
+          <div class="day-card__day">${item.day} день</div>
+          <div class="day-card__timer" data-day="${item.day}">
+            ${timerText}
+          </div>
+        `;
+
+        if (!locked && !item.opened) {
+          card.addEventListener('click', () => {
+            openGiftForDay(idx);
+          });
+        }
+
+        daysGrid.appendChild(card);
+      });
+
+      if (window.gsap) {
+        gsap.fromTo(
+          '.day-card',
+          { opacity: 0, y: 14, scale: 0.95 },
+          {
+            opacity: 1,
+            y: 0,
+            scale: 1,
+            duration: 0.35,
+            ease: 'back.out(1.8)',
+            stagger: 0.04,
+          }
+        );
+      }
+
+      weekInfoEl.textContent =
+        'Все 7 дней этой недели откроются по очереди. Возвращайтесь каждый день за новым подарком.';
+    }
+
+    function startTimers() {
+      if (timerInterval) clearInterval(timerInterval);
+      timerInterval = setInterval(() => {
+        const now = Date.now();
+        daysMeta.forEach((item) => {
+          const timerEl = daysGrid.querySelector(
+            `.day-card__timer[data-day="${item.day}"]`
+          );
+          if (!timerEl) return;
+
+          const locked = now < item.unlockAt;
+          if (locked) {
+            timerEl.textContent = formatRemaining(item.unlockAt - now);
+          } else if (!item.opened) {
+            timerEl.textContent = 'OPEN';
+          }
+        });
+      }, 1000);
+    }
+
+    function formatRemaining(ms) {
+      const sec = Math.max(0, Math.floor(ms / 1000));
+      const h = Math.floor(sec / 3600);
+      const m = Math.floor((sec % 3600) / 60);
+      const s = sec % 60;
+      if (h >= 100) return `${h}h`;
+      return `${String(h).padStart(2, '0')}:${String(m).padStart(
+        2,
+        '0'
+      )}:${String(s).padStart(2, '0')}`;
+    }
+
+    btnBackToWeeks.addEventListener('click', () => {
+      if (timerInterval) clearInterval(timerInterval);
+      showScreen('weeks');
+    });
+
+    // ----------------- GIFT OPENING -----------------
+    const giftBoxEl = document.getElementById('gift-box');
+    const giftButtonsEl = document.getElementById('gift-buttons');
+    const giftTitleEl = document.getElementById('gift-title');
+    const giftSubtitleEl = document.getElementById('gift-subtitle');
+    const btnClaim = document.getElementById('btn-claim');
+    const btnBurn = document.getElementById('btn-burn');
+
+    let activeDayIndex = null;
+    let giftOpened = false;
+
+    function openGiftForDay(index) {
+      activeDayIndex = index;
+      giftOpened = false;
+      giftButtonsEl.classList.add('hidden');
+      giftTitleEl.textContent = 'Нажмите, чтобы открыть';
+      giftSubtitleEl.textContent =
+        'Коснитесь коробки — и она взорвётся светом. Потом решите: получить подарок или сжечь его.';
+
+      if (window.gsap) {
+        gsap.set(giftBoxEl, { scale: 0.8, opacity: 0 });
+        gsap.to(giftBoxEl, { scale: 1, opacity: 1, duration: 0.5, ease: 'back.out(1.7)' });
+      }
+
+      showScreen('gift');
+    }
+
+    giftBoxEl.addEventListener('click', () => {
+      if (giftOpened) return;
+      giftOpened = true;
+
+      // «взрыв» подарка
+      if (window.gsap) {
+        const tl = gsap.timeline();
+        tl.to(giftBoxEl, {
+          scale: 1.15,
+          duration: 0.18,
+          ease: 'power3.out',
+        });
+        tl.to(giftBoxEl, {
+          scale: 0.95,
+          duration: 0.18,
+          ease: 'power3.inOut',
+        });
+        tl.to(giftBoxEl, {
+          scale: 1,
+          duration: 0.16,
+          ease: 'back.out(2)',
+        });
+
+        // вспышка
+        tl.to(
+          giftBoxEl,
+          { boxShadow: '0 0 80px rgba(255,255,255,1)', duration: 0.18, yoyo: true, repeat: 1 },
+          0.05
+        );
+
+        // частицы
+        const particleCount = 18;
+        for (let i = 0; i < particleCount; i++) {
+          const p = document.createElement('div');
+          p.style.position = 'absolute';
+          p.style.width = '6px';
+          p.style.height = '6px';
+          p.style.borderRadius = '999px';
+          p.style.background =
+            i % 2 === 0
+              ? 'rgba(255,255,255,0.9)'
+              : 'rgba(130,200,255,0.95)';
+          p.style.left = '50%';
+          p.style.top = '50%';
+          giftBoxEl.appendChild(p);
+          const angle = (Math.PI * 2 * i) / particleCount;
+          const dist = 60 + Math.random() * 40;
+          const x = Math.cos(angle) * dist;
+          const y = Math.sin(angle) * dist;
+
+          gsap.to(p, {
+            x,
+            y,
+            scale: 0.2,
+            opacity: 0,
+            duration: 0.8 + Math.random() * 0.2,
+            ease: 'power3.out',
+            onComplete: () => p.remove(),
+          });
+        }
+      }
+
+      giftTitleEl.textContent = 'Подарок открыт!';
+      giftSubtitleEl.textContent =
+        'Это демо-подарок Advent Gifts. В реальном приложении здесь будет NFT, звёзды или реальный Telegram-подарок.';
+
+      setTimeout(() => {
+        giftButtonsEl.classList.remove('hidden');
+        if (window.gsap) {
+          gsap.fromTo(
+            giftButtonsEl,
+            { opacity: 0, y: 10 },
+            { opacity: 1, y: 0, duration: 0.25, ease: 'power2.out' }
+          );
+        }
+      }, 250);
+    });
+
+    function finishDay(action) {
+      if (activeDayIndex == null) {
+        showScreen('weekDays');
+        return;
+      }
+      const meta = daysMeta[activeDayIndex];
+      meta.opened = true;
+
+      if (tg && tg.HapticFeedback) {
+        const type = action === 'burn' ? 'warning' : 'success';
+        tg.HapticFeedback.notificationOccurred(type);
+      }
+
+      alert(
+        action === 'burn'
+          ? 'Вы сожгли подарок 🔥 (в демо это просто сообщение).'
+          : 'Подарок получен 🎁 (в демо это просто сообщение).'
+      );
+
+      renderDays();
+      showScreen('weekDays');
+    }
+
+    btnClaim.addEventListener('click', () => finishDay('claim'));
+    btnBurn.addEventListener('click', () => finishDay('burn'));
+
+    // ----------------- START ANIMATIONS -----------------
+    if (window.gsap) {
+      gsap.fromTo(
+        '.user-pill',
+        { y: -10, opacity: 0 },
+        { y: 0, opacity: 1, duration: 0.4, ease: 'power2.out' }
+      );
+      gsap.fromTo(
+        '.balance-pill',
+        { y: -10, opacity: 0 },
+        { y: 0, opacity: 1, duration: 0.4, delay: 0.05, ease: 'power2.out' }
+      );
+    }
+  </script>
+</body>
+</html>
