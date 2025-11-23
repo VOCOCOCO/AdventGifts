@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>Chicken Farm Demo</title>
+    <title>Chicken World Demo</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <style>
         * {
@@ -22,6 +22,26 @@
             display: block;
             width: 100vw;
             height: 100vh;
+        }
+
+        /* Подсказка сверху */
+        .hint {
+            position: fixed;
+            top: 12px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 6px 14px;
+            border-radius: 999px;
+            background: rgba(0, 0, 0, 0.55);
+            color: #e0f4ff;
+            font-size: 13px;
+            letter-spacing: 0.02em;
+            backdrop-filter: blur(10px);
+            z-index: 5;
+            border: 1px solid rgba(80, 180, 255, 0.5);
+            white-space: nowrap;
+            opacity: 0;
+            transition: opacity 0.2s ease-out;
         }
 
         /* Контейнер джойстика (правый нижний угол) */
@@ -63,21 +83,62 @@
             transition: transform 80ms linear;
         }
 
-        /* Подсказка сверху */
-        .hint {
+        /* Кнопки справа от джойстика */
+        .action-buttons {
             position: fixed;
-            top: 12px;
-            left: 50%;
-            transform: translateX(-50%);
-            padding: 6px 14px;
-            border-radius: 999px;
-            background: rgba(0, 0, 0, 0.55);
-            color: #e0f4ff;
-            font-size: 13px;
-            letter-spacing: 0.02em;
-            backdrop-filter: blur(10px);
-            z-index: 5;
-            border: 1px solid rgba(80, 180, 255, 0.5);
+            right: 170px;
+            bottom: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            z-index: 11;
+        }
+
+        .action-buttons button {
+            width: 52px;
+            height: 52px;
+            border-radius: 16px;
+            border: 1px solid rgba(90, 160, 255, 0.9);
+            background: radial-gradient(circle at 30% 30%, #1b2235, #080b12);
+            color: #e8f4ff;
+            font-size: 18px;
+            font-weight: 600;
+            box-shadow: 0 0 10px rgba(0, 120, 255, 0.6);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0;
+        }
+
+        .action-buttons button:active {
+            transform: scale(0.94);
+        }
+
+        #invBtn {
+            font-size: 14px;
+        }
+
+        /* Кнопка прицела снизу слева */
+        .build-button {
+            position: fixed;
+            left: 20px;
+            bottom: 24px;
+            width: 54px;
+            height: 54px;
+            border-radius: 18px;
+            border: 1px solid rgba(90, 200, 255, 0.9);
+            background: radial-gradient(circle at 30% 30%, #1b2235, #05060a);
+            color: #e8f4ff;
+            font-size: 24px;
+            box-shadow: 0 0 10px rgba(0, 180, 255, 0.6);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 11;
+        }
+
+        .build-button:active {
+            transform: scale(0.94);
         }
     </style>
 </head>
@@ -85,9 +146,7 @@
 
 <canvas id="game"></canvas>
 
-<div class="hint">
-    🐔 Проведи пальцем по джойстику справа снизу, чтобы двигаться
-</div>
+<div class="hint" id="hint"></div>
 
 <!-- Виртуальный джойстик -->
 <div class="joystick-wrapper" id="joystickArea">
@@ -96,12 +155,21 @@
     </div>
 </div>
 
+<!-- Кнопки действия и инвентаря -->
+<div class="action-buttons">
+    <button id="actionBtn">E</button>
+    <button id="invBtn">INV</button>
+</div>
+
+<!-- Кнопка прицела (строительство) -->
+<button class="build-button" id="buildBtn">🎯</button>
+
 <script>
 (function() {
     const canvas = document.getElementById('game');
     const ctx = canvas.getContext('2d');
+    const hintEl = document.getElementById('hint');
 
-    // Размер канвы под экран
     function resizeCanvas() {
         const dpr = window.devicePixelRatio || 1;
         const rect = canvas.getBoundingClientRect();
@@ -112,33 +180,139 @@
     window.addEventListener('resize', resizeCanvas);
     resizeCanvas();
 
-    // "Мир" чуть больше экрана
-    const world = {
-        width: 2000,
-        height: 2000
-    };
+    // ---------- МИР ----------
+    const world = { width: 10000, height: 10000 };
 
     // Камера
-    const camera = {
-        x: 0,
-        y: 0
+    const camera = { x: 0, y: 0 };
+
+    // Сетка
+    const GRID_SIZE = 40;
+
+    // Река
+    const river = {
+        y: 5000,
+        width: 180,
+        waveOffset: 0,
+        speed: 40
+    };
+    const bridges = [
+        { x1: 2800, x2: 3000 },
+        { x1: 4900, x2: 5100 },
+        { x1: 7200, x2: 7400 }
+    ];
+
+    // Инвентарь и статы
+    const inventory = {
+        wood: 0,
+        stone: 0,
+        leaves: 0,
+        berries: 0
     };
 
-    // Курица
+    let inventoryOpen = false;
+    let inventoryAnim = 0; // 0..1
+    let inventoryTarget = 0;
+    const inventorySlots = []; // для кликов по слотам
+
+    // выбранный предмет для строительства
+    let selectedBuildItem = null; // 'wood' и т.д.
+
+    // Статы (0..1)
+    let food = 0.7;
+    let water = 0.7;
+    let health = 1.0;
+    let foodOverTime = 0; // для переедания
+
+    // Курочка
     const chicken = {
         x: world.width / 2,
         y: world.height / 2,
         radius: 20,
-        speed: 160 // пикселей в секунду
+        speed: 180
     };
 
-    // Направление от джойстика
-    const moveDir = {
-        x: 0,
-        y: 0
-    };
+    // Движение
+    const moveDir = { x: 0, y: 0 };
 
-    // Виртуальный джойстик
+    // Смерть / рестарт
+    let gameOver = false;
+    let gameOverReason = '';
+    let gameOverAnim = 0;
+    let gameOverTimer = 0;
+
+    function triggerGameOver(reason) {
+        if (gameOver) return;
+        gameOver = true;
+        gameOverReason = reason;
+        gameOverAnim = 0;
+        gameOverTimer = 2.5; // секунды до рестарта
+        showHint('Игра окончена...', 1.5);
+    }
+
+    function resetGame() {
+        // заново генерим всё
+        trees.length = 0;
+        bushes.length = 0;
+        placedBlocks.length = 0;
+        generateWorldObjects();
+
+        chicken.x = world.width / 2;
+        chicken.y = world.height / 2;
+
+        inventory.wood = 0;
+        inventory.stone = 0;
+        inventory.leaves = 0;
+        inventory.berries = 0;
+
+        food = 0.7;
+        water = 0.7;
+        health = 1.0;
+        foodOverTime = 0;
+        selectedBuildItem = null;
+
+        inventoryOpen = false;
+        inventoryAnim = 0;
+        inventoryTarget = 0;
+
+        gameOver = false;
+        gameOverReason = '';
+        gameOverAnim = 0;
+        gameOverTimer = 0;
+
+        showHint('Проведи пальцем по джойстику, чтобы двигаться', 4);
+    }
+
+    // ---------- HINT / ПОДСКАЗКИ С ТАЙПИНГОМ ----------
+    let hintTextFull = '';
+    let hintChar = 0;
+    let hintTime = 0;
+    let hintVisible = false;
+
+    function showHint(text, duration = 3) {
+        if (hintTextFull === text && hintVisible) return;
+        hintTextFull = text;
+        hintChar = 0;
+        hintTime = duration;
+        hintVisible = true;
+        hintEl.style.opacity = '1';
+    }
+
+    function updateHint(dt) {
+        if (!hintVisible) {
+            hintEl.style.opacity = '0';
+            return;
+        }
+        hintChar += dt * 40; // скорость печати
+        if (hintChar > hintTextFull.length) hintChar = hintTextFull.length;
+        hintEl.textContent = hintTextFull.slice(0, Math.floor(hintChar));
+        hintTime -= dt;
+        if (hintTime <= 0) {
+            hintVisible = false;
+        }
+    }
+
+    // ---------- ДЖОЙСТИК ----------
     const joystickBase = document.getElementById('joystickBase');
     const joystickStick = document.getElementById('joystickStick');
 
@@ -166,12 +340,10 @@
             ny = dy / dist;
         }
 
-        // Позиция стика
         const offsetX = nx * clampedDist;
         const offsetY = ny * clampedDist;
         joystickStick.style.transform = `translate(${offsetX}px, ${offsetY}px)`;
 
-        // Направление движения
         moveDir.x = nx;
         moveDir.y = ny;
     }
@@ -184,12 +356,12 @@
         joystickStick.style.transform = 'translate(0, 0)';
     }
 
-    // Touch события
+    // Touch
     joystickBase.addEventListener('touchstart', (e) => {
-        const touch = e.changedTouches[0];
+        const t = e.changedTouches[0];
         joystick.active = true;
-        joystick.pointerId = touch.identifier;
-        updateJoystickFromPoint(touch.clientX, touch.clientY);
+        joystick.pointerId = t.identifier;
+        updateJoystickFromPoint(t.clientX, t.clientY);
     }, { passive: true });
 
     window.addEventListener('touchmove', (e) => {
@@ -222,7 +394,7 @@
         }
     }, { passive: true });
 
-    // Поддержка мыши (для теста на ПК)
+    // Мышь
     let mouseDown = false;
     joystickBase.addEventListener('mousedown', (e) => {
         mouseDown = true;
@@ -243,64 +415,503 @@
         }
     });
 
-    // Простой фон-поле
-    function drawWorld(ctx, cam) {
+    // Кнопка E: разовое действие и удержание
+    const actionBtn = document.getElementById('actionBtn');
+    let actionHeld = false;
+
+    function handleActionOnce() {
+        if (gameOver) return;
+        // сначала проверяем строительство
+        if (buildMode && selectedBuildItem === 'wood' && inventory.wood > 0) {
+            placeBuildBlock();
+            return;
+        }
+        // затем рубка деревьев / ягоды
+        chopTreeOrCollectBerries();
+    }
+
+    actionBtn.addEventListener('click', () => {
+        handleActionOnce();
+    });
+
+    actionBtn.addEventListener('pointerdown', () => {
+        actionHeld = true;
+    });
+    actionBtn.addEventListener('pointerup', () => {
+        actionHeld = false;
+    });
+    actionBtn.addEventListener('pointercancel', () => {
+        actionHeld = false;
+    });
+    actionBtn.addEventListener('pointerleave', () => {
+        actionHeld = false;
+    });
+
+    // Клавиатура E / I для теста на ПК
+    window.addEventListener('keydown', (e) => {
+        if (e.key === 'e' || e.key === 'E') {
+            handleActionOnce();
+            actionHeld = true;
+        } else if (e.key === 'i' || e.key === 'I') {
+            toggleInventory();
+        }
+    });
+    window.addEventListener('keyup', (e) => {
+        if (e.key === 'e' || e.key === 'E') {
+            actionHeld = false;
+        }
+    });
+
+    // Кнопка инвентаря
+    const invBtn = document.getElementById('invBtn');
+    invBtn.addEventListener('click', () => {
+        toggleInventory();
+    });
+
+    function toggleInventory() {
+        inventoryOpen = !inventoryOpen;
+        inventoryTarget = inventoryOpen ? 1 : 0;
+        showHint(inventoryOpen ? 'Нажми на предмет в инвентаре...' : '', 2);
+    }
+
+    // Кнопка строительства (прицел)
+    const buildBtn = document.getElementById('buildBtn');
+    let buildMode = false;
+
+    buildBtn.addEventListener('click', () => {
+        if (gameOver) return;
+        if (!selectedBuildItem) {
+            showHint('Выбери блок дерева в инвентаре', 3);
+            return;
+        }
+        buildMode = true;
+        // ставим по центру клетки
+        chicken.x = Math.round(chicken.x / GRID_SIZE) * GRID_SIZE;
+        chicken.y = Math.round(chicken.y / GRID_SIZE) * GRID_SIZE;
+        showHint('Нажми E, чтобы поставить блок', 3);
+    });
+
+    // ---------- ОБЪЕКТЫ МИРА ----------
+    const trees = [];
+    const bushes = [];
+    const placedBlocks = []; // построенные блоки дерева
+
+    function generateWorldObjects() {
+        const treeCount = 450;
+        const bushCount = 800;
+
+        function rnd(min, max) {
+            return Math.random() * (max - min) + min;
+        }
+
+        for (let i = 0; i < treeCount; i++) {
+            const size = rnd(60, 90);
+            trees.push({
+                x: rnd(400, world.width - 400),
+                y: rnd(400, world.height - 400),
+                size,
+                state: 'standing', // 'falling','gone'
+                angle: 0,
+                fallDir: Math.random() < 0.5 ? -1 : 1,
+                fallProgress: 0
+            });
+        }
+
+        for (let i = 0; i < bushCount; i++) {
+            const size = rnd(40, 70);
+            bushes.push({
+                x: rnd(400, world.width - 400),
+                y: rnd(400, world.height - 400),
+                size,
+                isBerry: Math.random() < 0.25,
+                berries: 3
+            });
+        }
+    }
+    generateWorldObjects();
+
+    // ---------- РИСОВАНИЕ ДЕРЕВА / КУСТА ----------
+    function drawTree(t, cam) {
+        if (t.state === 'gone') return;
+        const px = t.x - cam.x;
+        const py = t.y - cam.y;
+
+        const size = t.size;
+        const crownW = size;
+        const crownH = size * 0.7;
+        const trunkW = size * 0.23;
+        const trunkH = size * 0.9;
+
+        const trunkX = -trunkW / 2;
+        const trunkY = 0;
+        const crownX = -crownW / 2;
+        const crownY = -crownH - trunkH * 0.1;
+
+        ctx.save();
+        ctx.translate(px, py);
+
+        if (t.state === 'falling') {
+            ctx.translate(0, trunkH / 2);
+            ctx.rotate(t.angle);
+            ctx.translate(0, -trunkH / 2);
+        }
+
+        // тень
+        ctx.fillStyle = 'rgba(0,0,0,0.35)';
+        ctx.beginPath();
+        ctx.ellipse(0, trunkH, crownW * 0.5, 10, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // ствол - чёрный контур
+        ctx.fillStyle = '#000000';
+        ctx.fillRect(trunkX - 2, trunkY - 2, trunkW + 4, trunkH + 4);
+        ctx.fillStyle = '#6b3f26';
+        ctx.fillRect(trunkX, trunkY, trunkW, trunkH);
+
+        // крона - чёрный контур
+        ctx.fillStyle = '#000000';
+        ctx.fillRect(crownX - 2, crownY - 2, crownW + 4, crownH + 4);
+
+        // блоки листвы
+        const block = size * 0.16;
+        const cols = 4;
+        const rows = 3;
+        for (let iy = 0; iy < rows; iy++) {
+            for (let ix = 0; ix < cols; ix++) {
+                const bx = crownX + ix * block;
+                const by = crownY + iy * block;
+                const shade = iy === 0 ? '#3a7f39' : (iy === rows - 1 ? '#27572e' : '#2f7033');
+                ctx.fillStyle = shade;
+                ctx.fillRect(Math.round(bx), Math.round(by), Math.round(block), Math.round(block));
+            }
+        }
+
+        ctx.restore();
+    }
+
+    function drawBush(b, cam) {
+        const px = b.x - cam.x;
+        const py = b.y - cam.y;
+
+        const w = b.size;
+        const h = b.size * 0.6;
+        const x = px - w / 2;
+        const y = py - h / 2;
+
+        ctx.save();
+        // контур
+        ctx.fillStyle = '#000000';
+        ctx.fillRect(Math.round(x) - 2, Math.round(y) - 2, Math.round(w) + 4, Math.round(h) + 4);
+
+        // основная масса
+        ctx.fillStyle = '#2c6e35';
+        ctx.fillRect(Math.round(x), Math.round(y), Math.round(w), Math.round(h));
+
+        ctx.fillStyle = '#3d8c40';
+        ctx.fillRect(Math.round(x + 4), Math.round(y + 4), Math.round(w - 8), Math.round(h - 8));
+
+        // если ягодный куст
+        if (b.isBerry && b.berries > 0) {
+            ctx.fillStyle = '#050507';
+            if (b.berries >= 1) ctx.fillRect(Math.round(x + w * 0.2), Math.round(y + h * 0.3), 4, 4);
+            if (b.berries >= 2) ctx.fillRect(Math.round(x + w * 0.55), Math.round(y + h * 0.55), 4, 4);
+            if (b.berries >= 3) ctx.fillRect(Math.round(x + w * 0.7), Math.round(y + h * 0.2), 4, 4);
+        }
+        ctx.restore();
+    }
+
+    // построенные блоки
+    function drawBlocks(cam) {
+        for (let b of placedBlocks) {
+            const px = b.x - cam.x;
+            const py = b.y - cam.y;
+            const size = GRID_SIZE;
+
+            ctx.save();
+            ctx.fillStyle = '#000000';
+            ctx.fillRect(px - size / 2 - 2, py - size / 2 - 2, size + 4, size + 4);
+            ctx.fillStyle = '#6b3f26';
+            ctx.fillRect(px - size / 2, py - size / 2, size, size);
+            ctx.fillStyle = '#845534';
+            ctx.fillRect(px - size / 2 + 4, py - size / 2 + 4, size - 8, size - 8);
+            ctx.restore();
+        }
+    }
+
+    // ---------- КОЛЛИЗИИ ----------
+    function rectCollide(x, y, w, h, cx, cy, r) {
+        const closestX = Math.max(x, Math.min(cx, x + w));
+        const closestY = Math.max(y, Math.min(cy, y + h));
+        const dx = cx - closestX;
+        const dy = cy - closestY;
+        return dx * dx + dy * dy < r * r;
+    }
+
+    function checkCollision(nx, ny) {
+        // Стволы деревьев
+        for (let t of trees) {
+            if (t.state === 'gone') continue;
+            const size = t.size;
+            const trunkW = size * 0.23;
+            const trunkH = size * 0.9;
+            const x = t.x - trunkW / 2;
+            const y = t.y; // верх ствола
+            if (rectCollide(x, y, trunkW, trunkH, nx, ny, chicken.radius * 0.7)) {
+                return true;
+            }
+        }
+        // Кусты - полностью непроходимые
+        for (let b of bushes) {
+            const w = b.size;
+            const h = b.size * 0.6;
+            const x = b.x - w / 2;
+            const y = b.y - h / 2;
+            if (rectCollide(x, y, w, h, nx, ny, chicken.radius * 0.7)) {
+                return true;
+            }
+        }
+        // Блоки
+        for (let blk of placedBlocks) {
+            const size = GRID_SIZE;
+            const x = blk.x - size / 2;
+            const y = blk.y - size / 2;
+            if (rectCollide(x, y, size, size, nx, ny, chicken.radius * 0.7)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // ---------- РЕКА ----------
+    function drawRiver(cam, dt) {
         const w = canvas.clientWidth;
         const h = canvas.clientHeight;
 
-        // Трава
-        ctx.fillStyle = '#112015';
+        const screenTop = river.y - river.width / 2 - cam.y;
+        const screenBottom = river.y + river.width / 2 - cam.y;
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(0, screenTop, w, river.width);
+        ctx.clip();
+
+        // фон воды
+        ctx.fillStyle = '#1b4d7a';
+        ctx.fillRect(0, screenTop, w, river.width);
+
+        // анимированные "волны"
+        river.waveOffset += river.speed * dt;
+        const waveSize = 20;
+        ctx.fillStyle = '#2d7fb5';
+        for (let x = -100 + (river.waveOffset % (waveSize * 2)); x < w + 100; x += waveSize * 2) {
+            ctx.fillRect(x, screenTop + 12, waveSize, 10);
+            ctx.fillRect(x + waveSize, screenTop + river.width - 22, waveSize, 10);
+        }
+
+        ctx.restore();
+
+        // тёмная кайма по берегу
+        ctx.fillStyle = '#0b1c23';
+        ctx.fillRect(0, screenTop - 4, w, 4);
+        ctx.fillRect(0, screenBottom, w, 4);
+
+        // Мосты
+        ctx.fillStyle = '#68452c';
+        for (let br of bridges) {
+            const x1 = br.x1 - cam.x;
+            const width = br.x2 - br.x1;
+            ctx.fillRect(x1, screenTop - 2, width, river.width + 4);
+            ctx.fillStyle = '#856142';
+            ctx.fillRect(x1 + 4, screenTop + 6, width - 8, river.width - 12);
+            ctx.fillStyle = '#68452c';
+        }
+    }
+
+    function isOnBridge(x, y) {
+        const top = river.y - river.width / 2;
+        const bottom = river.y + river.width / 2;
+        if (y < top || y > bottom) return false;
+        for (let br of bridges) {
+            if (x >= br.x1 && x <= br.x2) return true;
+        }
+        return false;
+    }
+
+    function isInRiver(x, y) {
+        const top = river.y - river.width / 2 + 10;
+        const bottom = river.y + river.width / 2 - 10;
+        return y >= top && y <= bottom && !isOnBridge(x, y);
+    }
+
+    function isNearRiverBank(x, y) {
+        const top = river.y - river.width / 2;
+        const bottom = river.y + river.width / 2;
+        const distTop = Math.abs(y - top);
+        const distBottom = Math.abs(y - bottom);
+        const nearBank = (distTop < 40 || distBottom < 40) && !isInRiver(x, y);
+        return nearBank;
+    }
+
+    // ---------- ДЕЙСТВИЯ: РУБКА / ЯГОДЫ / ПИТЬ ----------
+    function chopTreeOrCollectBerries() {
+        if (gameOver) return;
+        const actionRadius = 60;
+        // ближайшее дерево
+        let bestTree = null;
+        let bestDist = Infinity;
+        for (let t of trees) {
+            if (t.state !== 'standing') continue;
+            const dx = t.x - chicken.x;
+            const dy = t.y - chicken.y;
+            const dist = Math.hypot(dx, dy);
+            if (dist < actionRadius && dist < bestDist) {
+                bestDist = dist;
+                bestTree = t;
+            }
+        }
+
+        if (bestTree) {
+            // запускаем анимацию падения
+            bestTree.state = 'falling';
+            bestTree.angle = 0;
+            bestTree.fallDir = chicken.x < bestTree.x ? 1 : -1;
+            bestTree.fallProgress = 0;
+            showHint('Дерево срублено!', 2);
+            inventory.wood += 1;
+            return;
+        }
+
+        // ягоды
+        let bestBush = null;
+        bestDist = Infinity;
+        for (let b of bushes) {
+            if (!b.isBerry || b.berries <= 0) continue;
+            const dx = b.x - chicken.x;
+            const dy = b.y - chicken.y;
+            const dist = Math.hypot(dx, dy);
+            if (dist < actionRadius && dist < bestDist) {
+                bestDist = dist;
+                bestBush = b;
+            }
+        }
+        if (bestBush) {
+            bestBush.berries -= 1;
+            inventory.berries += 1;
+            showHint('Вы собрали ягоды', 2);
+        }
+    }
+
+    function handleContinuousAction(dt) {
+        if (gameOver) return;
+        // пить из реки
+        if (actionHeld && isNearRiverBank(chicken.x, chicken.y)) {
+            water += dt * 0.3;
+            if (water > 1.1) water = 1.1;
+            showHint('Вы пьёте воду...', 0.4);
+        }
+    }
+
+    // ---------- СТРОИТЕЛЬСТВО ----------
+    function placeBuildBlock() {
+        const gx = Math.round(chicken.x / GRID_SIZE) * GRID_SIZE;
+        const gy = Math.round(chicken.y / GRID_SIZE) * GRID_SIZE;
+
+        // проверка, чтобы не ставить в реку
+        if (isInRiver(gx, gy)) return;
+
+        placedBlocks.push({ x: gx, y: gy });
+        inventory.wood -= 1;
+        buildMode = false;
+    }
+
+    // ---------- ИНВЕНТАРЬ / КЛИКИ ----------
+
+    // ловим клики по canvas для слотов
+    canvas.addEventListener('click', (e) => {
+        if (!inventoryOpen || inventoryAnim < 0.9) return;
+        const rect = canvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+
+        for (let slot of inventorySlots) {
+            if (x >= slot.x && x <= slot.x + slot.w && y >= slot.y && y <= slot.y + slot.h) {
+                if (slot.key === 'berries') {
+                    if (inventory.berries > 0) {
+                        inventory.berries -= 1;
+                        food += 0.2;
+                        if (food > 1.1) food = 1.1;
+                        showHint('Вы съели ягоды', 2);
+                    }
+                } else if (slot.key === 'wood') {
+                    if (inventory.wood > 0) {
+                        // выделяем для строительства
+                        selectedBuildItem = selectedBuildItem === 'wood' ? null : 'wood';
+                        showHint(selectedBuildItem ? 'Теперь можно строить блоки дерева' : 'Строительство отменено', 2);
+                    }
+                }
+                // другие слоты пока без действий
+                break;
+            }
+        }
+    });
+
+    // ---------- ОТРИСОВКА МИРА / HUD / ИНВЕНТАРЯ ----------
+    function drawWorld(ctx) {
+        const w = canvas.clientWidth;
+        const h = canvas.clientHeight;
+
+        // трава и земля (фон)
+        ctx.fillStyle = '#274322';
         ctx.fillRect(0, 0, w, h);
 
-        // "Клеточки" поля
-        const gridSize = 80;
-        ctx.strokeStyle = 'rgba(120,180,120,0.25)';
+        // сетка
+        ctx.strokeStyle = 'rgba(40,80,40,0.35)';
         ctx.lineWidth = 1;
-        const startX = - (cam.x % gridSize);
-        const startY = - (cam.y % gridSize);
+        const startX = - (camera.x % GRID_SIZE);
+        const startY = - (camera.y % GRID_SIZE);
 
-        for (let x = startX; x < w; x += gridSize) {
+        for (let x = startX; x < w; x += GRID_SIZE) {
             ctx.beginPath();
             ctx.moveTo(x, 0);
             ctx.lineTo(x, h);
             ctx.stroke();
         }
-        for (let y = startY; y < h; y += gridSize) {
+        for (let y = startY; y < h; y += GRID_SIZE) {
             ctx.beginPath();
             ctx.moveTo(0, y);
             ctx.lineTo(w, y);
             ctx.stroke();
         }
 
-        // Пара деревьев / кустов (просто для атмосферы)
-        ctx.fillStyle = '#1f4a24';
-        for (let i = 0; i < 20; i++) {
-            const wx = (i * 150 + 400);
-            const wy = (i % 5) * 200 + 300;
-            const sx = wx - cam.x;
-            const sy = wy - cam.y;
-            if (sx < -60 || sy < -60 || sx > w + 60 || sy > h + 60) continue;
-            ctx.beginPath();
-            ctx.arc(sx, sy, 26, 0, Math.PI * 2);
-            ctx.fill();
+        // река
+        drawRiver(camera, globalDt);
 
-            ctx.fillStyle = '#16361a';
-            ctx.beginPath();
-            ctx.arc(sx - 10, sy, 18, 0, Math.PI * 2);
-            ctx.arc(sx + 12, sy + 4, 16, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.fillStyle = '#1f4a24';
+        // деревья
+        for (let t of trees) {
+            const px = t.x - camera.x;
+            const py = t.y - camera.y;
+            if (px < -200 || py < -200 || px > w + 200 || py > h + 200) continue;
+            drawTree(t, camera);
         }
+
+        // кусты
+        for (let b of bushes) {
+            const px = b.x - camera.x;
+            const py = b.y - camera.y;
+            if (px < -200 || py < -200 || px > w + 200 || py > h + 200) continue;
+            drawBush(b, camera);
+        }
+
+        // построенные блоки
+        drawBlocks(camera);
     }
 
-    // Курица (пока кружок с клювом)
-    function drawChicken(ctx, cam) {
-        const screenX = chicken.x - cam.x;
-        const screenY = chicken.y - cam.y;
+    function drawChicken(ctx) {
+        const sx = chicken.x - camera.x;
+        const sy = chicken.y - camera.y;
 
-        // Тело
         ctx.save();
-        ctx.translate(screenX, screenY);
+        ctx.translate(sx, sy);
 
         // Тень
         ctx.fillStyle = 'rgba(0,0,0,0.35)';
@@ -346,44 +957,333 @@
         ctx.restore();
     }
 
-    let lastTime = performance.now();
+    function drawBar(x, y, width, height, value, label) {
+        const v = Math.max(0, Math.min(1, value));
+        const filled = width * v;
 
-    function loop(now) {
-        const dt = (now - lastTime) / 1000;
-        lastTime = now;
+        // фон
+        ctx.fillStyle = 'rgba(10,15,20,0.9)';
+        ctx.fillRect(x, y, width, height);
 
-        // Обновление позиции курицы
-        if (moveDir.x !== 0 || moveDir.y !== 0) {
-            const len = Math.hypot(moveDir.x, moveDir.y) || 1;
-            const vx = moveDir.x / len;
-            const vy = moveDir.y / len;
+        // рамка
+        ctx.strokeStyle = 'rgba(90,170,230,0.9)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(x + 0.5, y + 0.5, width - 1, height - 1);
 
-            chicken.x += vx * chicken.speed * dt;
-            chicken.y += vy * chicken.speed * dt;
+        // цвет полосы
+        const isOver = value > 1.0;
+        ctx.fillStyle = isOver ? '#e53935' : '#43a047';
+        ctx.fillRect(x + 2, y + 2, filled - 4, height - 4);
 
-            // Ограничение в пределах мира
-            if (chicken.x < 0) chicken.x = 0;
-            if (chicken.y < 0) chicken.y = 0;
-            if (chicken.x > world.width) chicken.x = world.width;
-            if (chicken.y > world.height) chicken.y = world.height;
+        // текст
+        ctx.fillStyle = '#e8f4ff';
+        ctx.font = '11px system-ui';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(label, x + 6, y + height / 2);
+    }
+
+    function drawHUD() {
+        const w = canvas.clientWidth;
+
+        // фон панели
+        ctx.save();
+        ctx.globalAlpha = 0.9;
+        ctx.fillStyle = 'rgba(5,10,15,0.9)';
+        ctx.fillRect(8, 8, w - 16, 80);
+        ctx.restore();
+
+        ctx.strokeStyle = 'rgba(80,190,255,0.7)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(8.5, 8.5, w - 17, 79);
+
+        const barWidth = 180;
+        const barHeight = 16;
+        const barX = 16;
+        let barY = 14;
+
+        drawBar(barX, barY, barWidth, barHeight, food, 'Еда');
+        barY += barHeight + 6;
+        drawBar(barX, barY, barWidth, barHeight, water, 'Вода');
+        barY += barHeight + 6;
+        drawBar(barX, barY, barWidth, barHeight, health, 'Здоровье');
+
+        // мини-инвентарь справа
+        const text = `Wood: ${inventory.wood}   Stone: ${inventory.stone}   Leaves: ${inventory.leaves}   Berries: ${inventory.berries}`;
+        ctx.fillStyle = '#e8f4ff';
+        ctx.font = '12px system-ui';
+        ctx.textBaseline = 'top';
+        ctx.textAlign = 'right';
+        ctx.fillText(text, w - 16, 14);
+        ctx.textAlign = 'left';
+    }
+
+    function drawInventoryWindow(dt) {
+        // анимация
+        const speed = 6;
+        if (Math.abs(inventoryAnim - inventoryTarget) > 0.001) {
+            inventoryAnim += (inventoryTarget - inventoryAnim) * speed * dt;
         }
 
-        // Камера следует за курицей
+        if (inventoryAnim <= 0.01) return;
+
+        const w = canvas.clientWidth;
+        const h = canvas.clientHeight;
+
+        const alpha = 0.6 * inventoryAnim;
+        ctx.save();
+        ctx.fillStyle = `rgba(0,0,0,${alpha})`;
+        ctx.fillRect(0, 0, w, h);
+        ctx.restore();
+
+        const boxW = 280;
+        const boxH = 220;
+        const x = (w - boxW) / 2;
+        const y = (h - boxH) / 2;
+
+        const scale = 0.8 + 0.2 * inventoryAnim;
+        ctx.save();
+        ctx.translate(w / 2, h / 2);
+        ctx.scale(scale, scale);
+        ctx.translate(-w / 2, -h / 2);
+
+        ctx.fillStyle = 'rgba(10,18,28,0.98)';
+        ctx.fillRect(x, y, boxW, boxH);
+        ctx.strokeStyle = 'rgba(100,200,255,0.9)';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x + 1, y + 1, boxW - 2, boxH - 2);
+
+        ctx.fillStyle = '#e8f4ff';
+        ctx.font = '14px system-ui';
+        ctx.textBaseline = 'top';
+        ctx.fillText('Инвентарь', x + 12, y + 10);
+
+        // слоты 2x2
+        const slotSize = 64;
+        const startX = x + 30;
+        const startY = y + 40;
+        const gap = 12;
+
+        inventorySlots.length = 0;
+
+        function drawSlot(ix, iy, label, value, key) {
+            const sx = startX + ix * (slotSize + gap);
+            const sy = startY + iy * (slotSize + gap);
+
+            ctx.fillStyle = 'rgba(15,25,35,0.95)';
+            ctx.fillRect(sx, sy, slotSize, slotSize);
+            ctx.strokeStyle = 'rgba(90,150,220,0.9)';
+            ctx.strokeRect(sx + 0.5, sy + 0.5, slotSize - 1, slotSize - 1);
+
+            ctx.fillStyle = '#e8f4ff';
+            ctx.font = '11px system-ui';
+            ctx.textBaseline = 'top';
+            ctx.fillText(label, sx + 6, sy + 6);
+
+            ctx.font = '12px system-ui';
+            ctx.textBaseline = 'bottom';
+            ctx.fillText('x' + value, sx + slotSize - 6, sy + slotSize - 6);
+
+            // галочка для выбранного блока
+            if (key === 'wood' && selectedBuildItem === 'wood') {
+                ctx.fillStyle = '#7cf58f';
+                ctx.font = '16px system-ui';
+                ctx.textBaseline = 'top';
+                ctx.fillText('✓', sx + slotSize - 18, sy + 4);
+            }
+
+            inventorySlots.push({ x: sx, y: sy, w: slotSize, h: slotSize, key });
+        }
+
+        drawSlot(0, 0, 'Wood', inventory.wood, 'wood');
+        drawSlot(1, 0, 'Stone', inventory.stone, 'stone');
+        drawSlot(0, 1, 'Leaves', inventory.leaves, 'leaves');
+        drawSlot(1, 1, 'Berries', inventory.berries, 'berries');
+
+        ctx.restore();
+    }
+
+    function drawGameOverOverlay(dt) {
+        if (!gameOver) return;
+        gameOverAnim += dt * 3;
+        if (gameOverAnim > 1) gameOverAnim = 1;
+
+        const w = canvas.clientWidth;
+        const h = canvas.clientHeight;
+
+        ctx.save();
+        ctx.fillStyle = 'rgba(0,0,0,0.6)';
+        ctx.fillRect(0, 0, w, h);
+
+        const boxW = 260;
+        const boxH = 140;
+        const x = (w - boxW) / 2;
+        const y = (h - boxH) / 2;
+        const scale = 0.7 + 0.3 * gameOverAnim;
+
+        ctx.translate(w / 2, h / 2);
+        ctx.scale(scale, scale);
+        ctx.translate(-w / 2, -h / 2);
+
+        ctx.fillStyle = 'rgba(25, 10, 18, 0.95)';
+        ctx.fillRect(x, y, boxW, boxH);
+        ctx.strokeStyle = 'rgba(255,130,150,0.9)';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x + 1, y + 1, boxW - 2, boxH - 2);
+
+        ctx.fillStyle = '#ffb3c1';
+        ctx.font = '18px system-ui';
+        ctx.textBaseline = 'top';
+        ctx.textAlign = 'center';
+        ctx.fillText('Игра окончена', w / 2, y + 20);
+
+        ctx.font = '13px system-ui';
+        ctx.fillStyle = '#ffe8f0';
+        ctx.fillText(gameOverReason, w / 2, y + 52);
+
+        ctx.font = '11px system-ui';
+        ctx.fillStyle = '#f8d8e5';
+        ctx.fillText('Перезапуск...', w / 2, y + 90);
+
+        ctx.textAlign = 'left';
+        ctx.restore();
+    }
+
+    // ---------- ЛОГИКА СТАТОВ ----------
+    function updateStats(dt) {
+        if (gameOver) return;
+
+        // голод и жажда со временем
+        food -= dt * 0.01;
+        water -= dt * 0.015;
+        if (food < 0) food = 0;
+        if (water < 0) water = 0;
+
+        // если голод / жажда = 0 → здоровье падает
+        if (food === 0 || water === 0) {
+            health -= dt * 0.1;
+        } else if (health < 1.0 && food > 0.5 && water > 0.5) {
+            // лёгкий реген, если всё ок
+            health += dt * 0.02;
+        }
+        if (health > 1.0) health = 1.0;
+
+        if (health <= 0) {
+            triggerGameOver('Вы умерли от голода и жажды');
+        }
+
+        // переедание (если еда > 1.0)
+        if (food > 1.0) {
+            foodOverTime += dt;
+            if (foodOverTime > 5) {
+                triggerGameOver('Переедание! Курица не выдержала');
+            }
+        } else {
+            foodOverTime = 0;
+        }
+    }
+
+    // ---------- ЛОГИКА ПАДЕНИЯ ДЕРЕВЬЕВ ----------
+    function updateTrees(dt) {
+        for (let t of trees) {
+            if (t.state === 'falling') {
+                t.fallProgress += dt;
+                t.angle = t.fallDir * Math.min(Math.PI / 2, t.fallProgress * 2);
+                if (t.fallProgress >= 1) {
+                    t.state = 'gone';
+                }
+            }
+        }
+    }
+
+    // ---------- ЛУП ----------
+    let lastTime = performance.now();
+    let globalDt = 0;
+
+    resetGame();
+
+    function loop(now) {
+        globalDt = (now - lastTime) / 1000;
+        if (globalDt > 0.05) globalDt = 0.05;
+        lastTime = now;
+
+        const dt = globalDt;
+
+        // движение, если не gameOver
+        if (!gameOver) {
+            if (moveDir.x !== 0 || moveDir.y !== 0) {
+                let nx = chicken.x + moveDir.x / (Math.hypot(moveDir.x, moveDir.y) || 1) * chicken.speed * dt;
+                let ny = chicken.y + moveDir.y / (Math.hypot(moveDir.x, moveDir.y) || 1) * chicken.speed * dt;
+
+                // движение по X
+                if (!checkCollision(nx, chicken.y)) {
+                    chicken.x = nx;
+                }
+                // по Y
+                if (!checkCollision(chicken.x, ny)) {
+                    chicken.y = ny;
+                }
+
+                chicken.x = Math.max(0, Math.min(world.width, chicken.x));
+                chicken.y = Math.max(0, Math.min(world.height, chicken.y));
+            }
+
+            // затягивание в реку
+            if (isInRiver(chicken.x, chicken.y)) {
+                triggerGameOver('Курицу унесло течением');
+            }
+
+            // апдейт статы, дерево, непрерывное действие
+            updateStats(dt);
+            updateTrees(dt);
+            handleContinuousAction(dt);
+
+            // хинты по ситуации
+            // рядом дерево
+            let nearTree = false;
+            for (let t of trees) {
+                if (t.state !== 'standing') continue;
+                const dist = Math.hypot(t.x - chicken.x, t.y - chicken.y);
+                if (dist < 80) { nearTree = true; break; }
+            }
+            if (nearTree) showHint('Нажмите E, чтобы срубить дерево', 1.5);
+
+            // рядом ягодный куст
+            let nearBerry = false;
+            for (let b of bushes) {
+                if (!b.isBerry || b.berries <= 0) continue;
+                const dist = Math.hypot(b.x - chicken.x, b.y - chicken.y);
+                if (dist < 70) { nearBerry = true; break; }
+            }
+            if (nearBerry) showHint('Нажмите E, чтобы собрать ягоды', 1.5);
+
+            // пить у реки
+            if (isNearRiverBank(chicken.x, chicken.y)) {
+                showHint('Зажмите E, чтобы пить воду', 1.5);
+            }
+        } else {
+            // таймер перезапуска
+            gameOverTimer -= dt;
+            if (gameOverTimer <= 0) {
+                resetGame();
+            }
+        }
+
+        // камера
         const screenW = canvas.clientWidth;
         const screenH = canvas.clientHeight;
         camera.x = chicken.x - screenW / 2;
         camera.y = chicken.y - screenH / 2;
+        camera.x = Math.max(0, Math.min(world.width - screenW, camera.x));
+        camera.y = Math.max(0, Math.min(world.height - screenH, camera.y));
 
-        // Ограничение камеры
-        if (camera.x < 0) camera.x = 0;
-        if (camera.y < 0) camera.y = 0;
-        if (camera.x > world.width - screenW) camera.x = world.width - screenW;
-        if (camera.y > world.height - screenH) camera.y = world.height - screenH;
-
-        // Рендер
+        // рендер
         ctx.clearRect(0, 0, canvas.clientWidth, canvas.clientHeight);
-        drawWorld(ctx, camera);
-        drawChicken(ctx, camera);
+        drawWorld(ctx);
+        drawChicken(ctx);
+        drawHUD();
+        drawInventoryWindow(dt);
+        drawGameOverOverlay(dt);
+        updateHint(dt);
 
         requestAnimationFrame(loop);
     }
